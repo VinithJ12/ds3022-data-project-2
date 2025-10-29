@@ -115,10 +115,12 @@ def fetch_all_messages(sqs_url, total_messages=21):
 def assemble_phrase(messages):
     logger = get_run_logger()
     try:
+        #Sorting messages by their order number
         messages.sort(key=lambda x: x[0])
+        # Extract the words and put them together
         phrase = " ".join([word for _, word in messages])
         logger.info(f"Final Assembled Phrase: {phrase}")
-        return phrase
+        return phrase # returning the completed, full phrase
     except Exception as e:
         logger.error(f"Error assembling phrase: {e}")
         raise
@@ -131,15 +133,17 @@ def send_solution(uvaid, phrase, platform):
         raise ValueError("Phrase is empty, cannot submit!")
 
     try:
+        #This submits the phrase we returned above into the submission SQS queue
         response = sqs.send_message(
-            QueueUrl=submission_url,
-            MessageBody="DP2 SUBMISSION",
-            MessageAttributes={
+            QueueUrl=submission_url, #This is the  submission queue
+            MessageBody="DP2 SUBMISSION", # this is the message header
+            MessageAttributes={ # these are my submission attributes ( my computing id and the message content)
                 "uvaid": {"DataType": "String", "StringValue": uvaid},
                 "phrase": {"DataType": "String", "StringValue": phrase},
                 "platform": {"DataType": "String", "StringValue": platform},
             },
         )
+        #This extracts the HTTP code - if we get 200 it's a success
         status = response["ResponseMetadata"]["HTTPStatusCode"]
         if status == 200:
             logger.info("Submission successful! (HTTP 200)")
@@ -155,14 +159,18 @@ def quote_assembler_flow():
     logger = get_run_logger()
     logger.info("DP2 Quote Assembler Starting...")
 
+    #This is the first step ( sending the POST request to API)
     sqs_url = post_api()
+    #This is the second step ( polling and monitoring the SQS queue to fetch messages as they become ready)
     messages = fetch_all_messages(sqs_url)
+    #This is the third step ( Sorting and assembling  the message using their order number)
     phrase = assemble_phrase(messages)
+    #Last step is to send to the submission queue
     send_solution("uhe5bj", phrase, "prefect")
 
     logger.info("Flow complete. All steps successful!")
 
-
+#Runs prefect flow
 if __name__ == "__main__":
     quote_assembler_flow()
 
